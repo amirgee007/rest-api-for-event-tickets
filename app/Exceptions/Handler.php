@@ -2,8 +2,11 @@
 
 namespace App\Exceptions;
 
+use App\Http\Resources\ResponseResource;
 use Exception;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Auth\AuthenticationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class Handler extends ExceptionHandler
 {
@@ -46,6 +49,31 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Exception $exception)
     {
-        return parent::render($request, $exception);
+        // Don't override error handler if request is about OAuth
+        // See: routes/web.php or laravel/passport for more info.
+        if ($request->is('oauth/*') OR $request->is('login') OR $request->is('logout')) {
+
+            return parent::render($request, $exception);
+        }
+
+        $response = new ResponseResource($request);
+
+        if ($exception instanceof AuthenticationException) {
+
+            $response->setHttpCode(401);
+            $response->setMessage('You are not authorized.');
+        } else if ($exception instanceof NotFoundHttpException) {
+
+            $response->setHttpCode(404);
+            $response->setMessage('Endpoint not found.');
+        } else {
+
+            $response->setHttpCode(400);
+            $response->setMessage('Something is wrong: '.class_basename($exception));
+        }
+
+        return $response->response()->setStatusCode($response->getHttpCode());
     }
+
+
 }
